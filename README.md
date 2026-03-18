@@ -1,73 +1,147 @@
-# Azure Cloud-Native AI Inference API ☁️ 🐳
+# Breast Cancer Detection API
 
-![Azure](https://img.shields.io/badge/Azure-App%20Service-0078D4?style=for-the-badge&logo=microsoftazure)
-![Docker](https://img.shields.io/badge/Docker-Containerization-2496ED?style=for-the-badge&logo=docker)
-![FastAPI](https://img.shields.io/badge/FastAPI-High%20Performance-009688?style=for-the-badge&logo=fastapi)
-![Status](https://img.shields.io/badge/Status-Production%20Ready-success?style=for-the-badge)
+![GCP](https://img.shields.io/badge/GCP-Cloud%20Run-4285F4?style=for-the-badge&logo=googlecloud)
+![Docker](https://img.shields.io/badge/Docker-Containerized-2496ED?style=for-the-badge&logo=docker)
+![FastAPI](https://img.shields.io/badge/FastAPI-0.135.1-009688?style=for-the-badge&logo=fastapi)
+![Python](https://img.shields.io/badge/Python-3.12-3776AB?style=for-the-badge&logo=python)
+![Status](https://img.shields.io/badge/Status-Live-success?style=for-the-badge)
 
-![Demo](demo_screenshot.png)
+A production-grade MLOps API serving an MLP Neural Network for breast cancer 
+detection. Containerized with Docker, stored in Google Artifact Registry, and 
+deployed serverless on GCP Cloud Run.
 
-A production-grade MLOps pipeline that serves a Neural Network for breast cancer detection. The application is containerized using **Docker**, stored in **Azure Container Registry (ACR)**, and deployed to a serverless **Azure Web App for Containers**.
+**Live API:** https://breast-cancer-api-130979666829.us-central1.run.app/docs
 
-## 🏗️ Architecture
-**User (JSON)** -> **Azure App Service (Linux)** -> **Docker Container** -> **FastAPI** -> **Scikit-Learn Model**
+---
 
-## 🚀 Key Engineering Features
-
-### 1. Cloud-Native Deployment (Azure)
-- **Infrastructure:** Deployed on Azure App Service (Linux Plan) for horizontal scalability.
-- **Registry:** Private images secured in **Azure Container Registry (ACR)**.
-- **Security:** Managed Identity and Admin credentials injected via App Service Configuration, ensuring no hardcoded secrets in the codebase.
-
-### 2. Advanced Containerization
-- **Multi-Architecture Build:** Implemented `docker buildx` to cross-compile images on Apple Silicon (ARM64) for production Linux servers (AMD64).
-- **Optimization:** Used `python:3.9-slim` to reduce image size and attack surface.
-- **Port Mapping:** Custom binding to port 80 to adhere to Azure's routing requirements.
-
-### 3. Robust Backend (FastAPI)
-- **Strict Validation:** Implemented **Pydantic** models to validate 30+ input features before inference, preventing runtime crashes.
-- **Preprocessing Pipeline:** Integrated `StandardScaler` deserialization to ensure production data matches training distribution.
-- **Error Handling:** Graceful HTTP 500/422 handling for schema mismatches.
-
-## 🛠️ How to Run Locally
-
-1. **Clone the repository**
-   ```bash
-   git clone https://github.com/im-my-tea/azure-mlops-capstone.git
-   cd azure-mlops-capstone
-   ```
-
-2. **Build the Docker Image**
-   ```bash
-   docker build -t breast-cancer-api .
-   ```
-
-3. **Run Container**
-   ```bash
-   docker run -p 8000:80 breast-cancer-api
-   ```
-
-4. **Access Swagger UI**
-   Navigate to `http://localhost:8000/docs` to test the API endpoints.
-
-## ☁️ How to Deploy (Azure CLI)
-
-```bash
-# 1. Login to Azure
-az login
-
-# 2. Build & Push to ACR (Cross-platform)
-docker buildx build --platform linux/amd64 -t <your-registry>.azurecr.io/api:v1 --push .
-
-# 3. Deploy to Web App
-az webapp create --resource-group <your-rg> --plan <your-plan> --name <your-app-name> --deployment-container-image-name <your-registry>.azurecr.io/api:v1
+## Architecture
+```
+POST /predict
+     │
+     ▼
+GCP Cloud Run (serverless container)
+     │
+     ▼
+FastAPI + Pydantic validation (30 input features)
+     │
+     ▼
+StandardScaler.transform()
+     │
+     ▼
+MLPClassifier.predict() + predict_proba()
+     │
+     ▼
+JSON response: diagnosis + confidence + model_used
 ```
 
-## 📊 API Usage
+**Registry:** Google Artifact Registry (`us-central1`)  
+**Image:** `us-central1-docker.pkg.dev/ayush-mlops-gcp/mlops-repo/breast-cancer-api:latest`
+
+---
+
+## Migration: Azure → GCP
+
+This project was originally deployed on **Azure App Service (B1 plan)** with 
+the image stored in **Azure Container Registry (ACR)**. 
+
+The migration to GCP Cloud Run was a deliberate architectural decision:
+
+| Concern | Azure App Service | GCP Cloud Run |
+|---|---|---|
+| Compute model | Always-on VM | Scales to zero |
+| Idle cost | Yes (24/7 billing) | None |
+| Cold start | None | ~2-3 seconds |
+| Deployment | App Service Plan + Web App | Single gcloud command |
+
+For a bursty, low-traffic inference API, serverless is the correct model. 
+The Docker image is unchanged — only the platform it runs on changed.
+
+The original Azure deployment image is preserved in ACR at 
+`ayushmlops101.azurecr.io/breast-cancer-api:v1`.
+
+---
+
+## Key Engineering Decisions
+
+**Serialization chain**  
+`train.py` fits `StandardScaler` and trains `MLPClassifier` + 
+`LogisticRegression`, serializing all three via `joblib`. Models load once 
+at container startup (not per-request) to avoid cold-path latency.
+
+**Known limitation**  
+The scaler is fit on the full dataset before train/test split — a data 
+leakage issue. This affects reported accuracy but not the serving 
+architecture. The fix would be to fit the scaler only on training data 
+after the split.
+
+**Column rename in main.py**  
+Pydantic field names cannot contain spaces. Three `concave_points_*` 
+columns use underscores in the API schema but spaces in the training 
+data. A rename map is applied before `scaler.transform()` to reconcile 
+this.
+
+**Dependency pinning**  
+All direct dependencies are pinned to exact versions. `scikit-learn` is 
+pinned to `1.8.0` to match the version used during model training — 
+version mismatches cause unpickling warnings and potential silent failures.
+
+**Multi-arch build**  
+Built with `--platform linux/amd64` on Apple Silicon (ARM64) to target 
+Cloud Run's amd64 runtime.
+
+---
+
+## Run Locally
+```bash
+git clone https://github.com/im-my-tea/gcp-mlops-capstone.git
+cd gcp-mlops-capstone
+
+docker build --platform linux/amd64 -t breast-cancer-api .
+docker run -p 8080:8080 breast-cancer-api
+```
+
+Open `http://localhost:8080/docs` to test via Swagger UI.
+
+---
+
+## Deploy to GCP Cloud Run
+```bash
+# Authenticate
+gcloud auth login
+gcloud config set project YOUR_PROJECT_ID
+
+# Enable APIs
+gcloud services enable run.googleapis.com artifactregistry.googleapis.com
+
+# Configure Docker auth
+gcloud auth configure-docker us-central1-docker.pkg.dev
+
+# Create registry
+gcloud artifacts repositories create mlops-repo \
+    --repository-format=docker \
+    --location=us-central1
+
+# Build and push
+docker build --platform linux/amd64 \
+    -t us-central1-docker.pkg.dev/YOUR_PROJECT/mlops-repo/breast-cancer-api:latest .
+
+docker push us-central1-docker.pkg.dev/YOUR_PROJECT/mlops-repo/breast-cancer-api:latest
+
+# Deploy
+gcloud run deploy breast-cancer-api \
+    --image us-central1-docker.pkg.dev/YOUR_PROJECT/mlops-repo/breast-cancer-api:latest \
+    --platform managed \
+    --region us-central1 \
+    --allow-unauthenticated \
+    --memory 512Mi \
+    --cpu 1
+```
+
+---
+
+## API Usage
 
 **Endpoint:** `POST /predict`
-
-**Payload:**
 ```json
 {
   "radius_mean": 20.57,
