@@ -26,11 +26,11 @@ and can be redeployed to Azure at any time.
 
 ### App Service — running on Azure
 
-![Azure App Service](docs/azure/Screenshot%202026-03-18%20at%206.52.05%20PM.png)
+![Azure App Service](docs/azure/azure-app-service-running.png)
 
 ### Azure Container Registry — image stored
 
-![Azure Container Registry](docs/azure/Screenshot%202026-03-18%20at%206.53.35%20PM.png)
+![Azure Container Registry](docs/azure/azure-container-registry.png)
 
 ### Live API — Swagger UI
 
