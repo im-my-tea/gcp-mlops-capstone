@@ -10,15 +10,14 @@ import joblib
 print("Loading data...")
 df = pd.read_csv('data.csv')
 
-# --- DEBUGGING FIX STARTS HERE ---
-# Clean column names (Remove spaces and quotes)
+
+# Clean column names
 df.columns = df.columns.str.strip().str.replace('"', '')
 
 print(f"Columns found: {df.columns.tolist()}") # This will show us what Pandas actually sees
-# --- DEBUGGING FIX ENDS HERE ---
+
 
 # 2. Preprocessing
-# Drop 'id' (useless) and 'Unnamed: 32' (artifact of some CSVs)
 df = df.drop(columns=['id', 'Unnamed: 32'], errors='ignore')
 
 # Encode Target: M (Malignant) -> 1, B (Benign) -> 0
@@ -29,7 +28,7 @@ df['diagnosis'] = df['diagnosis'].map({'M': 1, 'B': 0})
 X = df.drop(columns=['diagnosis'])
 y = df['diagnosis']
 
-# 3. Scaling (CRITICAL for Neural Networks)
+# 3. Scaling (Critical for Neural Networks)
 print("Scaling features...")
 scaler = StandardScaler()
 X_scaled = scaler.fit_transform(X)
@@ -58,4 +57,4 @@ joblib.dump(lr_model, 'app/models/logistic_model.pkl')
 joblib.dump(nn_model, 'app/models/neural_net_model.pkl')
 joblib.dump(scaler, 'app/models/scaler.pkl')
 
-print("✅ DONE. Models and Scaler saved to app/models/")
+print("DONE. Models and Scaler saved to app/models/")
