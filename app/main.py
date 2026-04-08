@@ -6,15 +6,14 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 
 # 1. Setup & Path Management
-# Get the directory where THIS file (main.py) is located
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 MODEL_DIR = os.path.join(BASE_DIR, "models")
 
-# 2. Load Artifacts (Load once at startup)
+# 2. Load Artifacts 
 print("Loading models into memory...")
 try:
     scaler = joblib.load(os.path.join(MODEL_DIR, "scaler.pkl"))
-    model = joblib.load(os.path.join(MODEL_DIR, "neural_net_model.pkl")) # Using the better model
+    model = joblib.load(os.path.join(MODEL_DIR, "neural_net_model.pkl")) 
 except FileNotFoundError:
     raise RuntimeError("Model files not found! Did you run train.py?")
 
@@ -60,8 +59,7 @@ def home():
 @app.post("/predict")
 def predict_cancer(data: PatientData):
     try:
-        # 1. Convert Input JSON -> DataFrame (Expected by Scaler)
-        # We use data.dict() to get a dictionary, then wrap in [ ] to make a single row
+        # 1. Convert Input JSON -> DataFrame 
         input_data = pd.DataFrame([data.dict()])
         
         # The model expects spaces in these specific names
